@@ -1,0 +1,65 @@
+#Creating database:
+-------------------
+CREATE DATABASE IF NOT EXISTS bank_data;
+use bank_data;
+
+
+#Creating external table:
+-------------------------
+CREATE EXTERNAL TABLE bank_loan_data(Loan_ID STRING, Customer_ID STRING, Current_Loan_Amount FLOAT, Term STRING, 
+Credit_Score FLOAT, Annual_Income FLOAT, Years_in_current_job STRING, Home_Ownership STRING, Purpose STRING, 
+Monthly_debt FLOAT, Years_of_Credit_History FLOAT, Months_since_last_delinquent FLOAT, No_of_Open_Accounts INT,
+No_of_Credit_Problems INT, Current_Credit_Balance FLOAT, Maximum_Open_Credit FLOAT, Bankruptcies INT, 
+Tax_Liens INT)
+row format delimited
+fields terminated by ','
+escaped by '\\'
+STORED AS textfile
+LOCATION '/test'
+TBLPROPERTIES ('skip.header.line.count' = '1','hive.cli.print.header' = 'true');
+
+
+#Loading data from S3 to external table directly:
+-------------------------------------------------
+hive>load data inpath 's3://bank--data/bank_loan_data/Bank_loan_data.csv' overwrite into table bank_loan_data;
+
+#Loading data from S3 to HDFS and from hdfs to hive table using S3DistCp:
+----------------------------------------------------------
+s3-dist-cp --src 's3://bank--data/bank_loan_data/' --dest hdfs://ip-172-31-1-43.ap-south-1.compute.internal:8020/test 
+hive>load data inpath '/test' overwrite into table bank_loan_data;
+
+
+#Dynamic Partitioning: for Home_ownership column
+----------------------
+hive>use bank_data;
+hive>CREATE TABLE partitioned_loan_data(Loan_ID STRING, Customer_ID STRING, Current_Loan_Amount FLOAT, Term STRING, 
+>Credit_Score FLOAT, Annual_Income FLOAT, Years_in_current_job STRING,
+>Monthly_debt FLOAT, Years_of_Credit_History FLOAT, Months_since_last_delinquent FLOAT, No_of_Open_Accounts INT,
+>No_of_Credit_Problems INT, Current_Credit_Balance FLOAT, Maximum_Open_Credit FLOAT, Bankruptcies INT, 
+>Tax_Liens INT, Purpose STRING)
+>PARTITIONED BY (Home_Ownership STRING);
+
+hive>set hive.exec.dynamic.partition.mode=nonstrict
+
+hive>INSERT OVERWRITE TABLE partitioned_loan_data PARTITION(Home_Ownership)
+>select Loan_ID,Customer_ID, Current_Loan_Amount, Term, Credit_Score, Annual_Income, Years_in_current_job, Monthly_debt, Years_of_Credit_History,
+>Months_since_last_delinquent, No_of_Open_Accounts, No_of_Credit_Problems, Current_Credit_Balance, Maximum_Open_Credit, Bankruptcies ,
+>Tax_Liens, Purpose, Home_Ownership from bank_data.bank_loan_data;
+
+
+#Dynamic Partitioning: for Purpose column
+----------------------
+use bank_data;
+CREATE TABLE partitioned_loan_data_by_purpose(Loan_ID STRING, Customer_ID STRING, Current_Loan_Amount FLOAT, Term STRING, 
+Credit_Score FLOAT, Annual_Income FLOAT, Years_in_current_job STRING, Home_ownership STRING,
+Monthly_debt FLOAT, Years_of_Credit_History FLOAT, Months_since_last_delinquent FLOAT, No_of_Open_Accounts INT,
+No_of_Credit_Problems INT, Current_Credit_Balance FLOAT, Maximum_Open_Credit FLOAT, Bankruptcies INT, 
+Tax_Liens INT)
+PARTITIONED BY (Purpose STRING);
+INSERT OVERWRITE TABLE partitioned_loan_data_by_purpose PARTITION(Purpose)
+select Loan_ID,Customer_ID, Current_Loan_Amount, Term, Credit_Score, Annual_Income, Years_in_current_job, Home_Ownership, Monthly_debt, Years_of_Credit_History,
+Months_since_last_delinquent, No_of_Open_Accounts, No_of_Credit_Problems, Current_Credit_Balance, Maximum_Open_Credit, Bankruptcies ,
+Tax_Liens, Purpose from bank_data.bank_loan_data;
+
+
+

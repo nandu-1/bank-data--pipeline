@@ -1,0 +1,77 @@
+spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.0 .\sparktest.py
+
+spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.0 .\sparktest1.py
+
+spark-submit org.mongodb.spark:mongo-spark-connector:10.0.3 .\spark1.py
+
+
+###Correct approach
+from pyspark.sql import SparkSession
+import urllib
+uri = "mongodb+srv://dbuser:"+urllib.parse.quote("Lordganesha@1*")+"@hadoopmongodbcluster.w91ythb.mongodb.net/hadoop.bankdata/?retryWrites=true&writeConcern=majority"
+spark = SparkSession.builder.appName("pyspark-notebook2").config("spark.executor.memory", "1g")\
+.config("spark.mongodb.read.connection.uri",uri).config("spark.mongodb.write.connection.uri",uri)\
+.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.0").enableHiveSupport().getOrCreate()
+df = spark.sql("SELECT * from default.demo")
+df.write.format("com.mongodb.spark.sql.DefaultSource").option("uri",uri).option('database', 'hadoop').option('collection', 'bankdata').mode("append").save()
+
+
+============================================================================================================================================================================================
+from pyspark.sql import SparkSession
+import urllib
+
+uri = "mongodb+srv://dbuser:"+urllib.parse.quote("adminuser@1*")+"@hadoopmongodbcluster.w91ythb.mongodb.net/hadoop.bankdata/?retryWrites=true&writeConcern=majority"
+
+def write_to_mongodb(df):
+	df.write.format("com.mongodb.spark.sql.DefaultSource").option("uri",uri).option('database', 'hadoop').option('collection', 'bankdata').mode("append").save()
+
+def spark_operations(uri):
+
+	spark = SparkSession.builder.appName("pyspark-notebook2").config("spark.executor.memory", "1g")\
+	.config("spark.mongodb.read.connection.uri",uri).config("spark.mongodb.write.connection.uri",uri)\
+	.config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.0").enableHiveSupport().getOrCreate()
+	
+	# Customers having top 5 current loan amounts  and save the result in MongoDB
+	df1 = spark.sql("SELECT * from bank_data.bank-loan-data order by Current_Loan_Amount desc limit 5")
+	write_to_mongodb(df1)
+	
+	# Customers having the lowest 5 current loan amounts and save the result in MongoDB
+	df2 = spark.sql("SELECT * from bank_data.bank-loan-data order by Current_Loan_Amount limit 5")
+	write_to_mongodb(df2)
+	
+	# Customers who have taken the Short Term Loan
+	df3 = spark.sql("SELECT Customer_ID, Current_Loan_Amount from bank_data.bank-loan-data where lower(Term) like 'short term' ")
+	write_to_mongodb(df3)
+	
+	# Customers who have taken the Long Term Loan
+	df4 = spark.sql("SELECT Customer_ID, Current_Loan_Amount from bank_data.bank-loan-data where lower(Term) like 'short term' ")
+	write_to_mongodb(df4)
+
+	# Count of Bankruptcies
+	df5 = spark.sql("SELECT sum(Bankruptcies) as count_of_bankruptcies from bank_data.bank-loan-data")
+	write_to_mongodb(df5)
+
+	# Average monthly debt based on Term
+	df6 = spark.sql("SELECT Term, Avg(Monthly_Debt) as Avg_monthly_debt from bank_data.bank-loan-data group by Term")
+	write_to_mongodb(df6)
+
+	# Customers having 10 + years experience in their current job
+	df7 = spark.sql("SELECT * from bank_data.bank-loan-data where Years_in_current_job>10")
+	write_to_mongodb(df7)
+
+	# Aggregated sum of the total current loan based on Home ownership and Term
+	df8 = spark.sql("SELECT *,sum(Current_Loan_Amount) from bank_data.bank-loan-data group by Home_Ownership,Term")
+	write_to_mongodb(df8)
+
+	# Highest credit score for short term and long term customers
+	df9 = spqrk.sql("SELECT max(Credit_Score) as max_credit_score from bank_data.bank-loan-data group by Term")
+	write_to_mongodb(df9)
+
+	# Aggregated sum of credit score based on years in current job and Home ownership
+	df10 = spark.sql("SELECT Home_Ownership, Years_in_current_job, sum(Credit_Score) from bank_data.bank-loan-data group by Credit_Score")
+	write_to_mongodb(df10)
+	
+	return True
+
+if spark_operations(uri):
+	print("Operations completed successfully")
